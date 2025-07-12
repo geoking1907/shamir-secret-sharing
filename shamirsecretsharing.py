@@ -1,5 +1,5 @@
 import secrets
-from typing import List, Tuple, Dict, Optional, Union
+from typing import List, Tuple, Dict, Optional
 
 
 class SecurityError(Exception):
@@ -87,14 +87,38 @@ class Participant:
 
 
 class WeightedShamirSecretSharing:
-    '''
-        Input *p* - prime number, greater than your *secret*;
-        *T* - minimal total weight required to reconstruct the secret message;
-        *weights* - weights of participants;
-        *secret* - your secret message.
-    '''
+    """
+    Weighted Shamir's Secret Sharing scheme implementation.
+
+    Attributes:
+        p (int): Prime number, field characteristic (must be greater than the secret)
+        T (int): Minimal total weight required to reconstruct the secret
+        weights (List[int]): Weights assigned to each participant
+        secret (int): Secret value being protected
+        g (int): Generator for the multiplicative group modulo p
+        coeffs (List[int]): Coefficients of the polynomial (secret is coeffs[0])
+        factorial_coeffs (Dict[Tuple[int, int], int]): Precomputed factorial coefficients for derivative calculations
+        shares (List[Tuple[int, List[int]]]): Generated shares for participants (x, derivatives)
+        verifiers (Dict[int, List[int]]): Cryptographic commitments for share verification
+        participants (Dict[int, Participant]): Participant objects managed by the scheme
+        n (int): Number of participants (derived from weights length)
+    """
 
     def __init__(self, p: int, T: int, weights: List[int], secret: int, g: Optional[int] = None):
+        """
+        Initializes the weighted secret sharing scheme.
+
+        Parameters:
+            p (int): Prime number > secret (field characteristic)
+            T (int): Reconstruction threshold (minimal total weight)
+            weights (List[int]): Participant weights (length determines number of participants)
+            secret (int): Secret value to protect
+            g (Optional[int]): Generator for group (auto-calculated if None)
+
+        Raises:
+            ValueError: If any weight >= T or invalid parameters
+            RuntimeError: If suitable generator not found
+        """
         if any(w >= T for w in weights):
             raise ValueError("No single participant weight should be >= T")
         self.p = p  # prime
@@ -314,7 +338,6 @@ class WeightedShamirSecretSharing:
 # EXAMPLE
 if __name__ == "__main__":
     try:
-        # Инициализация схемы
         scheme = WeightedShamirSecretSharing(
             p=1031,
             T=10,
@@ -322,23 +345,15 @@ if __name__ == "__main__":
             secret=42
         )
 
-        # Получение участника
         participant = scheme.participants[1]
-        scheme.participants[1].verify_share()
-        scheme.participants[2].verify_share()
-        scheme.participants[4].verify_share()
 
-
-        # Верификация доли
         if participant.verify_share():
             print("Доля верифицирована успешно!")
         else:
             print("Ошибка верификации доли!")
 
-        # Обновление веса участника
         scheme.update_participant_weight(participant_id=1, new_weight=4)
 
-        # Восстановление секрета
         recovered_secret = scheme.reconstruct_secret([
             scheme.participants[1],
             scheme.participants[2],
