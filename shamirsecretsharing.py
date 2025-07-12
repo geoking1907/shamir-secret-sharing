@@ -21,13 +21,13 @@ class Participant:
     """
 
     def __init__(self,
-                 id: int,
+                 identificator: int,
                  weight: int,
                  p: int,
                  g: int,
                  derivatives: Optional[List[int]] = None,
                  commitments: Optional[List[int]] = None):
-        self.id = id
+        self.id = identificator
         self.weight = weight
         self.p = p
         self.g = g
@@ -35,8 +35,10 @@ class Participant:
         self.commitments = commitments or []
         self.verified = False
 
+
     def __repr__(self) -> str:
-        return f"Participant(id={self.id}, weight={self.weight}, verified={self.verified})"
+        return f"Participant(identificator={self.id}, weight={self.weight}, verified={self.verified})"
+
 
     def verify_share(self) -> bool:
         """
@@ -57,6 +59,7 @@ class Participant:
         )
         return self.verified
 
+
     def provide_share(self, max_derivatives: Optional[int] = None) -> Tuple[int, List[int]]:
         """
         Returns a share for restoring the secret.
@@ -65,7 +68,7 @@ class Participant:
             max_derivatives (int): Maximum number of derivatives to provide
 
         Returns:
-            Tuple[id, derivatives]: ID and list of derivatives
+            Tuple[identificator, derivatives]: ID and list of derivatives
         """
         if not self.verified:
             raise SecurityError("Share not verified. Cannot provide unverified share")
@@ -76,6 +79,7 @@ class Participant:
 
         return (self.id, derivatives)
 
+
     def update_derivatives(self, new_derivatives: List[int], new_commitments: Optional[List[int]] = None):
         """
         Updates the derivatives and obligations of the participant
@@ -84,6 +88,20 @@ class Participant:
         if new_commitments:
             self.commitments = new_commitments
         self.verified = False
+
+
+def _prime_factors(n: int) -> List[int]:
+    """Returns the prime divisors of a number"""
+    factors = []
+    d = 2
+    while d * d <= n:
+        while n % d == 0:
+            factors.append(d)
+            n //= d
+        d += 1
+    if n > 1:
+        factors.append(n)
+    return list(set(factors))
 
 
 class WeightedShamirSecretSharing:
@@ -104,13 +122,13 @@ class WeightedShamirSecretSharing:
         n (int): Number of participants (derived from weights length)
     """
 
-    def __init__(self, p: int, T: int, weights: List[int], secret: int, g: Optional[int] = None):
+    def __init__(self, p: int, t: int, weights: List[int], secret: int, g: Optional[int] = None):
         """
         Initializes the weighted secret sharing scheme.
 
         Parameters:
             p (int): Prime number > secret (field characteristic)
-            T (int): Reconstruction threshold (minimal total weight)
+            t (int): Reconstruction threshold (minimal total weight)
             weights (List[int]): Participant weights (length determines number of participants)
             secret (int): Secret value to protect
             g (Optional[int]): Generator for group (auto-calculated if None)
@@ -119,16 +137,16 @@ class WeightedShamirSecretSharing:
             ValueError: If any weight >= T or invalid parameters
             RuntimeError: If suitable generator not found
         """
-        if any(w >= T for w in weights):
+        if any(w >= t for w in weights):
             raise ValueError("No single participant weight should be >= T")
         self.p = p  # prime
         self.g = g if g is not None else self.find_generator()
-        self.T = T  # threshold
+        self.T = t  # threshold
         self.weights = weights
         self.n = len(weights)
         self.secret = secret % p
 
-        self.coeffs = [secret] + [secrets.randbelow(p - 2) + 1 for _ in range(T - 1)]
+        self.coeffs = [secret] + [secrets.randbelow(p - 2) + 1 for _ in range(t - 1)]
 
         self.factorial_coeffs = self._precompute_factorial_coeffs()
 
@@ -137,6 +155,7 @@ class WeightedShamirSecretSharing:
         self.add_verification()
 
         self.participants = self.create_participants()
+
 
     def _precompute_factorial_coeffs(self) -> Dict[Tuple[int, int], int]:
         """Pre-calculating factorial coefficients for optimization"""
@@ -149,30 +168,18 @@ class WeightedShamirSecretSharing:
                 coeffs[(j, k)] = coeff
         return coeffs
 
+
     def find_generator(self) -> int:
         """Finds a generator for the GF(p) field"""
         for candidate in (2, 3, 5, 6, 7, 11):
             if pow(candidate, (self.p - 1) // 2, self.p) != 1:
                 return candidate
 
-        factors = self._prime_factors(self.p - 1)
+        factors = _prime_factors(self.p - 1)
         for candidate in range(2, self.p):
             if all(pow(candidate, (self.p - 1) // f, self.p) != 1 for f in factors):
                 return candidate
         raise RuntimeError(f"Generator not found for prime {self.p}")
-
-    def _prime_factors(self, n: int) -> List[int]:
-        """Returns the prime divisors of a number"""
-        factors = []
-        d = 2
-        while d * d <= n:
-            while n % d == 0:
-                factors.append(d)
-                n //= d
-            d += 1
-        if n > 1:
-            factors.append(n)
-        return list(set(factors))
 
     def add_verification(self):
         """Generates cryptographic commitments for verifying shares"""
@@ -183,16 +190,17 @@ class WeightedShamirSecretSharing:
             commitments = [pow(self.g, deriv, self.p) for deriv in derivatives]
             self.verifiers[x] = commitments
 
+
     def evaluate_derivative(self, x: int, k: int) -> int:
         """Calculates the k-th derivative at point x"""
         result = 0
         for j in range(k, self.T):
-            # Используем предвычисленные коэффициенты
             coeff = self.factorial_coeffs.get((j, k), 1)
             term = self.coeffs[j] * coeff % self.p
             term = term * pow(x, j - k, self.p) % self.p
             result = (result + term) % self.p
         return result
+
 
     def generate_shares(self) -> List[Tuple[int, List[int]]]:
         """Generates shares for all participants"""
@@ -203,6 +211,7 @@ class WeightedShamirSecretSharing:
             shares.append((x, derivatives))
         return shares
 
+
     def create_participants(self) -> Dict[int, Participant]:
         """Creates and initializes scheme participants"""
         participants = {}
@@ -212,7 +221,7 @@ class WeightedShamirSecretSharing:
             commitments = self.verifiers.get(x, [])
 
             participant = Participant(
-                id=x,
+                identificator=x,
                 weight=w,
                 p=self.p,
                 g=self.g,
@@ -227,6 +236,7 @@ class WeightedShamirSecretSharing:
 
             participants[x] = participant
         return participants
+
 
     def update_participant_weight(self, participant_id: int, new_weight: int):
         """Updates the participant's weight and recalculates the derivatives"""
@@ -258,6 +268,7 @@ class WeightedShamirSecretSharing:
             except Exception as e:
                 raise RuntimeError(f"Failed to verify participant {participant_id} after update") from e
 
+
     def reconstruct_secret(self, provided_participants: List[Participant]) -> int:
         """
         Restores the secret based on the provided participants.
@@ -277,6 +288,7 @@ class WeightedShamirSecretSharing:
                 raise SecurityError(f"Participant {participant.id} has unverified share") from e
 
         return self._reconstruct_secret(provided_shares)
+
 
     def _reconstruct_secret(self, provided_shares: List[Tuple[int, List[int]]]) -> int:
         """The internal method of secret reconstruction"""
@@ -303,6 +315,7 @@ class WeightedShamirSecretSharing:
                 equations.append((equation, value))
 
         return self.gaussian_elimination(equations)
+
 
     def gaussian_elimination(self, equations: List[Tuple[List[int], int]]) -> int:
         """Solves a system of linear equations using the Gauss method"""
@@ -338,19 +351,14 @@ class WeightedShamirSecretSharing:
 # EXAMPLE
 if __name__ == "__main__":
     try:
-        scheme = WeightedShamirSecretSharing(
-            p=1031,
-            T=10,
-            weights=[3, 5, 2, 4],
-            secret=42
-        )
+        scheme = WeightedShamirSecretSharing(p=1031, t=10, weights=[3, 5, 2, 4], secret=42)
 
         participant = scheme.participants[1]
 
         if participant.verify_share():
-            print("Доля верифицирована успешно!")
+            print("Success!")
         else:
-            print("Ошибка верификации доли!")
+            print("Failure!")
 
         scheme.update_participant_weight(participant_id=1, new_weight=4)
 
@@ -359,6 +367,6 @@ if __name__ == "__main__":
             scheme.participants[2],
             scheme.participants[4]
         ])
-        print(f"Восстановленный секрет: {recovered_secret}")
+        print(f"Reconstructed secret: {recovered_secret}")
     except ValueError as e:
         print(f"\033[91mExpected error: {e}\033[0m")
