@@ -1,5 +1,6 @@
 import secrets
 from typing import List, Tuple, Dict, Optional
+import json
 
 
 class SecurityError(Exception):
@@ -90,6 +91,12 @@ class Participant:
         self.verified = False
 
 
+    def export_share(self):
+        share = [self.id, self.derivatives]
+        with open(f"participant{self.id}.json", mode="w", encoding="utf-8") as write_file:
+            json.dump(share, write_file)
+
+
 def _prime_factors(n: int) -> List[int]:
     """Returns the prime divisors of a number"""
     factors = []
@@ -102,6 +109,12 @@ def _prime_factors(n: int) -> List[int]:
     if n > 1:
         factors.append(n)
     return list(set(factors))
+
+
+def import_share(id: int):
+    with open(f"participant{id}.json", mode="r", encoding="utf-8") as read_file:
+        share = json.load(read_file)
+    return share
 
 
 class WeightedShamirSecretSharing:
@@ -180,6 +193,7 @@ class WeightedShamirSecretSharing:
             if all(pow(candidate, (self.p - 1) // f, self.p) != 1 for f in factors):
                 return candidate
         raise RuntimeError(f"Generator not found for prime {self.p}")
+
 
     def add_verification(self):
         """Generates cryptographic commitments for verifying shares"""
@@ -352,13 +366,6 @@ class WeightedShamirSecretSharing:
 if __name__ == "__main__":
     try:
         scheme = WeightedShamirSecretSharing(p=1031, t=10, weights=[3, 5, 2, 4], secret=42)
-
-        participant = scheme.participants[1]
-
-        if participant.verify_share():
-            print("Success!")
-        else:
-            print("Failure!")
 
         scheme.update_participant_weight(participant_id=1, new_weight=4)
 
